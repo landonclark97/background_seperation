@@ -3,6 +3,7 @@ import torch.optim as opt
 from torchvision import transforms
 import numpy as np
 import scipy
+import scipy.sparse
 import scipy.linalg as lin
 import laplace
 
@@ -17,85 +18,67 @@ from memory_profiler import profile
 def tsp_to_nsp(A):
     return scipy.sparse.csr_matrix((A.coalesce().values().detach().numpy(),A.coalesce().indices().detach().numpy()),shape=(A.shape[0],A.shape[1]))
 
-def sparse_identity(n):
-    return torch.sparse_coo_tensor([torch.arange(n).int().tolist(),torch.arange(n).int().tolist()],torch.ones(n),(n,n))
-
-def sparse_diag(a):
-    return torch.sparse_coo_tensor([torch.arange(a.shape[0]).int().tolist(),torch.arange(a.shape[0]).int().tolist()],a,(a.shape[0],a.shape[0]))
-
-@profile
+# @profile
 def back_sep_w_admm(D,Phi_s,Phi_t,rho,lam1,lam2,gam1,gam2,thresh=0.001,iters=100):
 
-    D = torch.reshape(D,(D.shape[0]*D.shape[1],D.shape[2])) #.detach().numpy()
+    D = torch.reshape(D,(D.shape[0]*D.shape[1],D.shape[2])).detach().numpy()
 
     n = int(D.shape[0])
     t = int(D.shape[1])
 
 
-    L = torch.clone(D) # None
-    S = torch.zeros((n,t)) # None
-    U = torch.clone(L) # None
-    L_tilda = torch.clone(S)
+    L = np.copy(D) # None
+    S = np.zeros((n,t)) # None
+    U = np.copy(L) # None
+    L_tilda = np.copy(S)
 
-    def shrink(A,mu):
-        a = A.to_dense()
-        a = torch.add(-torch.ones((a.shape[0],a.shape[1]))*mu,torch.abs(a))
-        a_max = torch.maximum(a,torch.zeros((a.shape[0],a.shape[1])))
-        a_s = torch.sign(a)
-        return torch.multiply(a_s,a_max)
-        # return torch.multiply(torch.sign(A),torch.max(-mu+torch.abs(A),0).values)
+    def shrink(G,mu):
+        if scipy.sparse.issparse(G):
+            G = G.todense()
+        g_max = np.maximum(np.abs(G)-mu,0)
+        g_s = np.sign(G)
+        return np.multiply(g_s,g_max)
 
     for i in range(iters):
         print('run:',i)
 
-        S_prev = torch.clone(S)
-        L_prev = torch.clone(L)
+        S_prev = np.copy(S)
+        L_prev = np.copy(L)
 
         # L subproblem
         # A = (1.0+gam2+rho)*scipy.sparse.identity(n,format='csr') + gam1*Phi_s
-        A = (1.0+gam2+rho)*sparse_identity(n) + gam1*Phi_s
-        B = gam2*Phi_t
-        Q = D - S + rho*(U+L_tilda)
-        # L = lin.solve_sylvester(A,B,Q)
-        # F = (L+S-D) + lam1*Psi_s*L + lam2*L*Phi_t + rho*(L-U-L_tilda)
-        # L = L - s*F
-        x = torch.rand((A.shape[1],B.shape[0]),requires_grad=True)
-        o = opt.RMSprop([x],lr=2.0)
-        for g in range(70):
+        # B = gam2*Phi_t
+        # Q = D - S + rho*(U+L_tilda)
 
-            error = (torch.sparse.mm(A,x)+torch.sparse.mm(B.t(),x.t()).t())-Q
-            loss = torch.mean(torch.mean(error,0),0)**2
-            print('\r'+str(i)+', '+str(g)+', '+str(loss.item()),end ='')
-            o.zero_grad()
-            loss.backward()
-            o.step()
+        s = 0.05
+
+        for g in range(1000):
+
+            F = (L+S-D) + lam1*Phi_s@L + lam2*L@Phi_t + rho*(L-U-L_tilda)
+            f_norm = np.linalg.norm(F,ord='fro')
+            print(f'\r{f_norm}',end='')
+            if f_norm < 10.0:
+                break
+            L = L - s*F
+
         print()
-
-        L = x
-        L = L.requires_grad_(False)
-        # print(L)
-
-        # plt.imshow(L.detach().numpy(),interpolation='nearest')
-        # plt.show()
-
         # S subproblem
         A = D-L
-        print(A.shape)
         S = shrink(A,lam2)
 
         # U subproblem
-        # A, Sig, B = np.linalg.svd(L-L_tilda,full_matrices=False)
-        A, Sig, B = torch.svd_lowrank(L-L_tilda,niter=4)
-        # Sig = Sig*scipy.sparse.identity(Sig.shape[0],format='csr')
-        print(Sig.shape)
-        Sig = sparse_diag(Sig)
-        print(Sig.shape)
+        A, Sig, B = np.linalg.svd(L-L_tilda,full_matrices=False)
+        Sig = scipy.sparse.diags(Sig,format='csr')
         Sig_tilda = shrink(Sig,lam1/rho)
-        U = torch.sparse.mm(torch.sparse.mm(A,Sig_tilda),B.T)
+        U = A@Sig_tilda@B.T
 
         L_tilda = L_tilda + (U-L)
 
-        if (torch.norm(L-L_prev,p='fro') < thresh) and (torch.norm(S-S_prev,p='fro') < thresh):
+        a = np.linalg.norm(L-L_prev,ord='fro')
+        print(a)
+        b = np.linalg.norm(S-S_prev,ord='fro')
+        print(b)
+        if (a < thresh) and (b < thresh):
             break
 
     return L, S
@@ -135,17 +118,24 @@ for i_f in i_files:
 Lt = laplace.t_laplace(d/255.0)
 Ls = laplace.s_laplace(d/255.0)
 
+Lt = tsp_to_nsp(Lt)
+Ls = tsp_to_nsp(Ls)
+
 print(Lt.shape)
 print(Ls.shape)
 
 L, S = back_sep_w_admm(d,Ls,Lt,0.9,0.1,0.1,0.1,0.1,thresh=0.001,iters=100)
 
-plt.imshow(L,interpolation='nearest')
-plt.show()
+d = d.detach().numpy()
+L = np.lib.stride_tricks.as_strided(L,d.shape,d.strides)
+print(L.shape)
+L = L[:,:,0]
+L_img = Image.fromarray(L,'L')
+L_img.show()
 
-x = input('?')
 
-plt.imshow(S,interpolation='nearest')
-plt.show()
+S = np.lib.stride_tricks.as_strided(S,d.shape,d.strides)
 
-x = input('?')
+S = S[:,:,0]
+S_img = Image.fromarray(S,'L')
+S_img.show()

@@ -141,8 +141,8 @@ def s_laplace(d):
 
     tmp = torch.exp(-(torch.pow(ds,2)/THETA))
 
-    idy = np.reshape(np.matlib.repmat(np.arange(N),K,1),(N*K))
-    idx = np.reshape(ind[:,1:].detach().numpy(),(N*K))
+    idx = np.reshape(np.matlib.repmat(np.arange(N),K,1),(N*K))
+    idy = np.reshape(ind[:,1:].detach().numpy(),(N*K))
 
     ids = torch.cat((torch.tensor(idx).unsqueeze(0),torch.tensor(idy).unsqueeze(0)),0)
 
