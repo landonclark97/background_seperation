@@ -19,13 +19,12 @@ def tsp_to_nsp(A):
     return scipy.sparse.csr_matrix((A.coalesce().values().detach().numpy(),A.coalesce().indices().detach().numpy()),shape=(A.shape[0],A.shape[1]))
 
 # @profile
-def back_sep_w_admm(D,Phi_s,Phi_t,rho,gam1,gam2,lam1,lam2,step=0.1,thresh=0.001,iters=100):
+def back_sep_w_admm(D,Phi_s,Phi_t,rho,gam1,gam2,lam1,lam2,step=0.01,thresh=0.001,iters=100):
 
     D = torch.reshape(D,(D.shape[0]*D.shape[1],D.shape[2])).detach().numpy()
 
     n = int(D.shape[0])
     t = int(D.shape[1])
-
 
     L = np.copy(D) # None
     S = np.zeros((n,t)) # None
@@ -41,6 +40,8 @@ def back_sep_w_admm(D,Phi_s,Phi_t,rho,gam1,gam2,lam1,lam2,step=0.1,thresh=0.001,
 
     for i in range(iters):
         # print('run:',i)
+        
+        print(D)
 
         # print(D)
         # print(L)
@@ -55,14 +56,14 @@ def back_sep_w_admm(D,Phi_s,Phi_t,rho,gam1,gam2,lam1,lam2,step=0.1,thresh=0.001,
         plt.title('L: ' + str(i))
         # plt.imshow(p, cmap='gray', interpolation='nearest', vmin=0.0, vmax=255.0)
         # plt.show()
-        plt.imsave('./data/rpca/L_frame'+str(i)+'.png', p, cmap='gray', vmin=0.0, vmax=255.0)
+        plt.imsave('./data/rpca/L_frame'+str(i)+'.png', p, cmap='gray', vmin=0.0, vmax=1.0)
 
 
         q = S_print[:,:,40]
         plt.title('S: ' + str(i))
         # plt.imshow(q, cmap='gray', interpolation='nearest', vmin=0.0, vmax=255.0)
         # plt.show()
-        plt.imsave('./data/rpca/S_frame'+str(i)+'.png', q, cmap='gray', vmin=0.0, vmax=255.0)
+        plt.imsave('./data/rpca/S_frame'+str(i)+'.png', q, cmap='gray', vmin=0.0, vmax=1.0)
         # '''
 
         S_prev = np.copy(S)
@@ -75,10 +76,10 @@ def back_sep_w_admm(D,Phi_s,Phi_t,rho,gam1,gam2,lam1,lam2,step=0.1,thresh=0.001,
 
         s = step
 
-        for g in range(60):
+        for g in range(50):
             L_grad_prev = np.copy(L)
-            F = (L+S-D) + gam1*Phi_s@L + gam2*L@Phi_t + rho*(L-U-L_tilda)
-            L = L - s*F
+            F = (L+S-D) + (gam1*(Phi_s@L)) + (gam2*(L@Phi_t)) + (rho*(L-U-L_tilda))
+            L = L - (s*F)
             if np.linalg.norm(L-L_grad_prev,ord='fro')/np.linalg.norm(L_grad_prev,ord='fro') < 1e-4:
                 break
 
@@ -93,7 +94,7 @@ def back_sep_w_admm(D,Phi_s,Phi_t,rho,gam1,gam2,lam1,lam2,step=0.1,thresh=0.001,
         Sig = scipy.sparse.diags(Sig,format='csr')
         # print(np.sort(Sig.todense())[-10:-1])
         Sig_tilda = shrink(Sig,lam1/rho)
-        U = A @ Sig_tilda @ B.T
+        U = A @ Sig_tilda @ B
 
         L_tilda = L_tilda + (U-L)
 
@@ -194,13 +195,13 @@ print('lowest combination:',low_comb)
 
 '''
 
-rho = 1e-4
-gam1 = 1e-6
+rho = 1e-2
+gam1 = 1e-5
 gam2 = 1e-5
-lam1 = 2.0
-lam2 = 0.1
+lam1 = 5.0
+lam2 = 1e-1
 
-L, S = back_sep_w_admm(d,Ls,Lt,rho,gam1,gam2,lam1,lam2,thresh=0.0001,iters=35)
+L, S = back_sep_w_admm(d/255.0,Ls,Lt,rho,gam1,gam2,lam1,lam2,thresh=0.0001,iters=25)
 
 L = np.array(L)
 L = L.reshape((150,200,-1))
@@ -210,13 +211,13 @@ S = S.reshape((150,200,-1))
 for i in range(10):
     l = L[:,:,i]
     plt.title('L: ' + str(i))
-    plt.imshow(l, cmap='gray', interpolation='nearest', vmin=0.0, vmax=255.0)
+    plt.imshow(l, cmap='gray', interpolation='nearest', vmin=0.0, vmax=1.0)
     plt.show()
 
 
     s = S[:,:,i]
     plt.title('S: ' + str(i))
-    plt.imshow(s, cmap='gray', interpolation='nearest', vmin=0.0, vmax=255.0)
+    plt.imshow(s, cmap='gray', interpolation='nearest', vmin=0.0, vmax=1.0)
     plt.show()
 
 

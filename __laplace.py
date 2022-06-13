@@ -58,7 +58,7 @@ def t_laplace(d):
 
     N = IMG_WIDTH*IMG_HEIGHT
 
-    KT = 4
+    KT = 8
 
     STRIDE = 1
     PAD_LEN = 2
@@ -104,7 +104,7 @@ def s_laplace(d):
     N = IMG_WIDTH*IMG_HEIGHT
 
     STRIDE = 1
-    PAD_LEN = 3
+    PAD_LEN = 4
     WIN_LEN = 2
 
     PAD_OFF = (2*PAD_LEN)+1
