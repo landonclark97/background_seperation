@@ -19,7 +19,7 @@ def tsp_to_nsp(A):
     return scipy.sparse.csr_matrix((A.coalesce().values().detach().numpy(),A.coalesce().indices().detach().numpy()),shape=(A.shape[0],A.shape[1]))
 
 # @profile
-def back_sep_w_admm(D,Phi_s,Phi_t,rho,gam1,gam2,lam1,lam2,step=0.01,thresh=0.001,iters=100):
+def back_sep_w_admm(D,Phi_s,Phi_t,rho,gam1,gam2,lam1,lam2,step=0.1,thresh=0.001,iters=100):
 
     D = torch.reshape(D,(D.shape[0]*D.shape[1],D.shape[2])).detach().numpy()
 
@@ -39,16 +39,11 @@ def back_sep_w_admm(D,Phi_s,Phi_t,rho,gam1,gam2,lam1,lam2,step=0.01,thresh=0.001
         return np.multiply(g_s,g_max)
 
     for i in range(iters):
+
         # print('run:',i)
-        
-        print(D)
+        #print(np.linalg.norm(L+S-D,ord='fro'))
 
-        # print(D)
-        # print(L)
-        # print(S)
-        print(np.linalg.norm(L+S-D,ord='fro'))
-
-        # '''
+        #'''
         L_print = np.array(L).reshape((150,200,-1))
         S_print = np.array(S).reshape((150,200,-1))
 
@@ -56,15 +51,17 @@ def back_sep_w_admm(D,Phi_s,Phi_t,rho,gam1,gam2,lam1,lam2,step=0.01,thresh=0.001
         plt.title('L: ' + str(i))
         # plt.imshow(p, cmap='gray', interpolation='nearest', vmin=0.0, vmax=255.0)
         # plt.show()
-        plt.imsave('./data/rpca/L_frame'+str(i)+'.png', p, cmap='gray', vmin=0.0, vmax=1.0)
+        plt.imsave('./data/rpca/L_frame'+str(i)+'.png', p,cmap='gray')
+                  #vmin=0.0, vmax=1.0)
 
 
         q = S_print[:,:,40]
         plt.title('S: ' + str(i))
         # plt.imshow(q, cmap='gray', interpolation='nearest', vmin=0.0, vmax=255.0)
         # plt.show()
-        plt.imsave('./data/rpca/S_frame'+str(i)+'.png', q, cmap='gray', vmin=0.0, vmax=1.0)
-        # '''
+        plt.imsave('./data/rpca/S_frame'+str(i)+'.png', np.abs(q), cmap='gray')
+                  #vmin=0.0, vmax=1.0)
+        #'''
 
         S_prev = np.copy(S)
         L_prev = np.copy(L)
@@ -84,24 +81,18 @@ def back_sep_w_admm(D,Phi_s,Phi_t,rho,gam1,gam2,lam1,lam2,step=0.01,thresh=0.001
                 break
 
         # S subproblem
-        S = D-L
-        if i == 2:
-            print(np.mean(S))
-        S = shrink(S,lam2)
+        S = shrink(D-L,lam2)
 
         # U subproblem
         A, Sig, B = np.linalg.svd(L-L_tilda,full_matrices=False)
-        Sig = scipy.sparse.diags(Sig,format='csr')
-        # print(np.sort(Sig.todense())[-10:-1])
         Sig_tilda = shrink(Sig,lam1/rho)
+        Sig_tilda = scipy.sparse.diags(Sig_tilda,format='csr')
         U = A @ Sig_tilda @ B
 
         L_tilda = L_tilda + (U-L)
 
         a = np.linalg.norm(L-L_prev,ord='fro')/np.linalg.norm(L_prev,ord='fro')
-        # print('relative L error:',a)
         b = np.linalg.norm(S-S_prev,ord='fro')/np.linalg.norm(S_prev,ord='fro')
-        # print('relative S error:',b)
         if (a < thresh) and (b < thresh):
             break
 
@@ -137,14 +128,21 @@ for i_f in i_files:
     # break
 
 
-bckgnd_img = Image.open('./data/walking_bgnd.png')
-b_img = transforms.functional.pil_to_tensor(bckgnd_img).float()
-b_img = resize(b_img)
-b_img = gray(b_img)
-b_img = torch.transpose(b_img,0,2)
-b_img = torch.transpose(b_img,0,1)
-b_img = b_img.squeeze(2)
-b_img = b_img.detach().numpy()
+#bckgnd_img = Image.open('./data/walking_bgnd.png')
+#b_img = transforms.functional.pil_to_tensor(bckgnd_img).float()
+#b_img = resize(b_img)
+#b_img = gray(b_img)
+#b_img = torch.transpose(b_img,0,2)
+#b_img = torch.transpose(b_img,0,1)
+#b_img = b_img.squeeze(2)
+#b_img = b_img.detach().numpy()
+#b_img = b_img/255.0
+
+b_img = np.zeros((150,200))
+dnp = d[:,:,[0,-1]].detach().numpy()
+b_img[:,0:100] = dnp[:,0:100,0]
+b_img[:,100:200] = dnp[:,100:200,1]
+b_img = b_img/255.0
 
 
 # Lt = laplace.t_laplace(d).to_sparse_csr()
@@ -165,13 +163,13 @@ low_score = np.inf
 low_comb = None
 
 '''
-for rho in [0.1, 0.01, 0.001, 0.0001, 0.00001, 0.000001]:
-    for lam1 in [1000.0, 100.0, 10.0, 1.0, 0.1]:
-        for lam2 in [0.1, 0.01, 0.001, 0.0001, 0.00001]:
-            for gam1 in [0.1, 0.01, 0.01, 0.0001, 0.00001]:
-                for gam2 in [0.1, 0.01, 0.001, 0.0001, 0.00001]:
+for rho in [0.05, 0.01, 0.005]:
+    for lam1 in [10.0, 5.0, 2.0]:
+        for lam2 in [0.005, 0.001, 0.0005]:
+            for gam1 in [5e-5, 1e-5, 5e-6]:
+                for gam2 in [5e-5, 1e-5, 5e-6]:
 
-                    L, S = back_sep_w_admm(d,Ls,Lt,rho,gam1,gam2,lam1,lam2,thresh=0.0001,iters=35)
+                    L, S = back_sep_w_admm(d/255.0,Ls,Lt,rho,gam1,gam2,lam1,lam2,thresh=0.0001,iters=35)
 
                     L = np.array(L)
                     L = L.reshape((150,200,-1))
@@ -195,19 +193,46 @@ print('lowest combination:',low_comb)
 
 '''
 
-rho = 1e-2
-gam1 = 1e-5
-gam2 = 1e-5
+rho = 5e-2
+gam1 = 5e-5
+gam2 = 5e-5
 lam1 = 5.0
-lam2 = 1e-1
+lam2 = 1e-2
 
-L, S = back_sep_w_admm(d/255.0,Ls,Lt,rho,gam1,gam2,lam1,lam2,thresh=0.0001,iters=25)
+L, S = back_sep_w_admm(d/255.0,Ls,Lt,rho,gam1,gam2,lam1,lam2,thresh=0.0001,iters=50)
 
 L = np.array(L)
 L = L.reshape((150,200,-1))
 S = np.array(S)
 S = S.reshape((150,200,-1))
 
+#L = np.array(L)
+#L = L.reshape((150,200,-1))
+L_mean = np.mean(L,axis=2)
+# S = np.array(S)
+
+diff = b_img-L_mean
+score = np.linalg.norm(diff,ord='fro')/np.linalg.norm(b_img,ord='fro')
+
+print([rho, lam1, lam2, gam1, gam2])
+print(score)
+
+plt.subplot(1,3,1)
+plt.title('L mean')
+plt.imshow(L_mean, cmap='gray', interpolation='nearest', vmin=0.0, vmax=1.0)
+#plt.show()
+
+plt.subplot(1,3,2)
+plt.title('Back img')
+plt.imshow(b_img, cmap='gray', interpolation='nearest', vmin=0.0, vmax=1.0)
+#plt.show()
+
+plt.subplot(1,3,3)
+plt.title('Diff img')
+plt.imshow(diff, cmap='gray', interpolation='nearest', vmin=0.0, vmax=1.0)
+plt.show()
+
+'''
 for i in range(10):
     l = L[:,:,i]
     plt.title('L: ' + str(i))
@@ -224,3 +249,5 @@ for i in range(10):
 LS = L+S
 plt.imshow(LS, cmap='gray', interpolation='nearest')
 plt.show()
+
+'''
