@@ -208,10 +208,10 @@ print('lowest combination:',low_comb)
 
 rho = 5e-2
 gam = 5e-5
-lam1 = 5.0
-lam2 = 1e-2
+lam1 = 3.0
+lam2 = 3e-2
 
-L, S, scores = back_sep_w_admm(d/255.0,Ls,rho,gam,lam1,lam2,b_img,thresh=0.0001,iters=75)
+L, S, scores = back_sep_w_admm(d/255.0,Ls,rho,gam,lam1,lam2,b_img,thresh=0.0001,iters=60)
 
 L = np.array(L)
 L = L.reshape((150,200,-1))
@@ -236,7 +236,7 @@ plt.imshow(b_img, cmap='gray', interpolation='nearest', vmin=0.0, vmax=1.0)
 
 plt.subplot(2,2,3)
 plt.title('Diff img')
-plt.imshow(diff, cmap='gray', interpolation='nearest', vmin=0.0, vmax=1.0)
+plt.imshow(diff, cmap='gray', interpolation='nearest', vmin=np.min(np.abs(diff)), vmax=np.max(np.abs(diff)))
 #plt.show()
 
 plt.subplot(2,2,4)
