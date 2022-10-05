@@ -3,27 +3,9 @@ import numpy.matlib
 
 import torch
 from torchvision import transforms
-from torch import nn
-import torch.nn.functional as F
-from torch.optim import AdamW
-
-import torch_sparse
-
-import sys
-
-# device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
-# device = torch.device("cpu")
-# cpu = torch.device("cpu")
-# cpu = device
-# print("using device:", device)
 
 
-import matplotlib.pyplot as plt
-
-import glob
-from PIL import Image
-
-import random
+device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
 
 
 def im2col(A, BSZ, stepsize=1):
@@ -43,7 +25,7 @@ def pdist2(A, B, n=5):
     pd = torch.empty((A.shape[0],n))
     indices = torch.empty((A.shape[0],n))
     for row in range(A.shape[0]):
-        diffs = torch.sum(torch.pow(B-A[row,:],2),1)
+        diffs = torch.pow(torch.mean(B-A[row,:],1),2)
         diffs, ind = torch.sort(diffs)
         pd[row,:] = diffs[:n]
         indices[row,:] = ind[:n]
@@ -52,6 +34,8 @@ def pdist2(A, B, n=5):
 
 @torch.no_grad()
 def t_laplace(d):
+    if isinstance(d, np.ndarray):
+        d = torch.tensor(d).double().to(device)
 
     IMG_WIDTH = d.shape[0]
     IMG_HEIGHT = d.shape[1]
@@ -59,7 +43,7 @@ def t_laplace(d):
 
     N = IMG_WIDTH*IMG_HEIGHT
 
-    KT = 4
+    KT = 8
 
     STRIDE = 1
     PAD_LEN = 2
@@ -89,7 +73,7 @@ def t_laplace(d):
     ids = torch.cat((torch.arange(IMG_PIX).unsqueeze(0),torch.arange(IMG_PIX).unsqueeze(0)),0)
     W = torch.sparse_coo_tensor(ids,D,(IMG_PIX,IMG_PIX))
 
-    Lt = torch.sparse_coo_tensor([torch.arange(IMG_PIX).int().tolist(),torch.arange(IMG_PIX).int().tolist()],torch.ones(IMG_PIX),(IMG_PIX,IMG_PIX)) - (W*A*W)
+    Lt = torch.sparse_coo_tensor([torch.arange(IMG_PIX).int().tolist(),torch.arange(IMG_PIX).int().tolist()],torch.ones(IMG_PIX),(IMG_PIX,IMG_PIX)) - torch.sparse.mm(torch.sparse.mm(W,A),W)
     Lt.coalesce()
 
     return Lt
@@ -97,6 +81,9 @@ def t_laplace(d):
 
 @torch.no_grad()
 def s_laplace(d):
+    if isinstance(d, np.ndarray):
+        d = torch.tensor(d).double().to(device)
+    d /= torch.max(d)
 
     IMG_WIDTH = d.shape[0]
     IMG_HEIGHT = d.shape[1]
@@ -105,7 +92,7 @@ def s_laplace(d):
     N = IMG_WIDTH*IMG_HEIGHT
 
     STRIDE = 1
-    PAD_LEN = 2
+    PAD_LEN = 4
     WIN_LEN = 2
 
     PAD_OFF = (2*PAD_LEN)+1
@@ -116,37 +103,38 @@ def s_laplace(d):
     dT = d.permute(*torch.arange(d.ndim-1,-1,-1))
     d = transforms.Pad(PAD_LEN,padding_mode='symmetric')(dT)
     d = d.permute(*torch.arange(d.ndim-1,-1,-1))
-    # d = d.to(device)
+    d = d.cpu().detach().numpy()
 
-    patches = torch.empty((N,PAD_OFF**2,IMG_PIX))
+    patches = np.empty((N,PAD_OFF**2,IMG_PIX))
     for i in range(IMG_PIX):
-        patches[:,:,i] = torch.tensor(im2col(d[:,:,i].detach().numpy(),(PAD_OFF,PAD_OFF))).T
-    patches = torch.reshape(patches,(N,(PAD_OFF**2)*IMG_PIX))
+        patches[:,:,i] = im2col(d[:,:,i],(PAD_OFF,PAD_OFF)).T
+    patches = np.reshape(patches,(N,(PAD_OFF**2)*IMG_PIX))
 
-    ind = torch.reshape(torch.arange(N,dtype=torch.int32),(IMG_WIDTH,IMG_HEIGHT))
-    ind = np.pad(ind.detach().numpy(),(PAD_LEN,PAD_LEN),mode='symmetric')
-    ind = torch.tensor(im2col(ind,(PAD_OFF,PAD_OFF)))
-    index = torch.cat((torch.arange(N,dtype=torch.int32).unsqueeze(0),ind[np.arange((K/2)),:],ind[np.arange((K/2)+1,ind.shape[0]),:]),dim=0)
+    ind = np.reshape(np.arange(N,dtype=np.int_),(IMG_WIDTH,IMG_HEIGHT))
+    ind = np.pad(ind,(PAD_LEN,PAD_LEN),mode='symmetric')
+    ind = im2col(ind,(PAD_OFF,PAD_OFF)).T
+    index = np.concatenate((np.expand_dims(np.arange(N,dtype=np.int_),1),ind[:,np.arange(K/2,dtype=np.int_)],ind[:,np.arange((K/2)+1,ind.shape[1],dtype=np.int_)]),axis=1)
 
-    ds = torch.empty((K*N))
+    ds = np.empty((K*N))
 
     i_d = 0
 
     for i in range(N):
         for j in range(1,K+1):
             di = patches[i,:]
-            dj = patches[ind[j,i],:]
-            ds[i_d] = torch.norm(di-dj)
+            dj = patches[index[i,j],:]
+            ds[i_d] = np.linalg.norm(di-dj)
             i_d += 1
 
-    tmp = torch.exp(-(torch.pow(ds,2)/THETA))
+    tmp = np.exp(-(np.power(ds,2)/THETA))
 
-    idx = np.reshape(np.matlib.repmat(np.arange(N),K,1),(N*K))
-    idy = np.reshape(ind[1:,:].detach().numpy(),(N*K))
+    idx = np.reshape(np.matlib.repmat(np.arange(N),K,1).T,(N*K))
+    idy = np.reshape(index[:,1:],(N*K))
 
     ids = torch.cat((torch.tensor(idx).unsqueeze(0),torch.tensor(idy).unsqueeze(0)),0)
 
     A = torch.sparse_coo_tensor(ids,tmp,(N,N))
+    A.coalesce()
     A = A + torch.transpose(A,0,1)
     A.coalesce()
 
@@ -155,7 +143,7 @@ def s_laplace(d):
     ids = torch.cat((torch.arange(N).unsqueeze(0),torch.arange(N).unsqueeze(0)),0)
     W = torch.sparse_coo_tensor(ids,D,(N,N))
 
-    Ls = torch.sparse_coo_tensor(ids,torch.ones(N),(N,N)) - (W*A*W)
+    Ls = torch.sparse_coo_tensor(ids,torch.ones(N),(N,N)) - torch.sparse.mm(torch.sparse.mm(W,A),W)
     Ls.coalesce()
 
     return Ls
