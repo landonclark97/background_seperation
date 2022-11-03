@@ -70,8 +70,7 @@ while True:
 b_img = small_frames[50]
 small_frames = small_frames[cut_ind:-5]
 frames = len(small_frames)
-data_mat = np.stack(list(map(lambda x: np.reshape(x,(H*W,1)),small_frames)),axis=2)[:,:,0]
-
+data_mat = np.stack(list(map(lambda x: np.reshape(x,(H*W,1)),small_frames)),axis=1)
 
 fig, axs = plt.subplots(3, 3, figsize=(13, 10))
 
@@ -87,9 +86,9 @@ fig.tight_layout()
 # [0.05, 2.0, 0.0005, 1e-05]
 
 # two person walking, 24 iters
-rho = 5e-3
-gam = 5e-6
-lam1 = 2.0
+rho = 1e-2
+gam = 1e-5
+lam1 = 5.0
 lam2 = 1e-3
 
 # one person walking, 24 iters
@@ -101,7 +100,9 @@ lam2 = 1e-3
 
 L, S, scores = admm(np.reshape(data_mat,(H,W,-1)),
                     laplace.s_laplace(np.reshape(data_mat,(H,W,-1))),
-                    rho,gam,lam1,lam2,b_img=b_img,thresh=0.0001,iters=24)
+                    rho,gam,lam1,lam2,b_img=b_img,thresh=0.0001,iters=50)
+
+print(scores)
 
 
 # format background images
@@ -111,7 +112,6 @@ L = L.reshape((H,W,-1))
 # format foreground images
 S = np.array(S)
 S = S.reshape((H,W,-1))
-
 
 
 ncols = 6
@@ -124,8 +124,8 @@ for i in range(ncols):
     ind = i*(frames//ncols)
     axs[0, i].imshow(small_frames[ind], cmap='gray')
 
-    background = L[:, ind].reshape(small_frames[ind].shape)
-    foreground = S[:, ind].reshape(small_frames[ind].shape)
+    background = L[:,:, ind]#.reshape(small_frames[ind].shape)
+    foreground = S[:,:, ind]#.reshape(small_frames[ind].shape)
     axs[1, i].imshow(background, cmap='gray')
     axs[1, i].set_title("ADMM, L")
     axs[2, i].imshow(foreground, cmap='gray')

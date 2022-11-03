@@ -70,7 +70,7 @@ while True:
 b_img = small_frames[50]
 small_frames = small_frames[cut_ind:-5]
 frames = len(small_frames)
-data_mat = np.stack(list(map(lambda x: np.reshape(x,(H*W,3,1)),small_frames)),axis=2)[:,:,0]
+data_mat = np.stack(list(map(lambda x: np.reshape(x,(H*W,3,1)),small_frames)),axis=2)[:,:,:,0]
 
 
 fig, axs = plt.subplots(3, 3, figsize=(13, 10))
@@ -172,8 +172,8 @@ for i in range(ncols):
     ind = i*(frames//ncols)
     axs[0, i].imshow(small_frames[ind])
 
-    background = L[:, ind].reshape(small_frames[ind].shape)
-    foreground = S[:, ind].reshape(small_frames[ind].shape)
+    background = L[:,:,:, ind].reshape(small_frames[ind].shape)
+    foreground = S[:,:,:, ind].reshape(small_frames[ind].shape)
     axs[1, i].imshow(background)
     axs[1, i].set_title("ADMM, L")
     axs[2, i].imshow(foreground)

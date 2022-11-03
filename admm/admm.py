@@ -8,13 +8,16 @@ import scipy.linalg as lin
 device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
 
 
-def admm(D,Phi_s,rho,gam,lam1,lam2,b_img=None,step=0.1,thresh=0.001,iters=100):
+def admm(D,Phi_s,rho,gam,lam1,lam2,b_img=None,f_imgs=None,step=0.1,thresh=0.001,iters=100):
+    assert not ((b_img is not None) and (f_imgs is not None))
     if isinstance(D, np.ndarray):
         D = torch.tensor(D).double().to(device)
-    scale = torch.max(D)
+    scale = torch.max(D).item()
     D /= scale
     if b_img is not None:
         b_img /= np.amax(b_img)
+    if f_imgs is not None:
+        f_imgs /= np.amax(f_imgs)
 
     D = torch.reshape(D,(D.shape[0]*D.shape[1],D.shape[2])).cpu().detach().numpy()
 
@@ -55,10 +58,23 @@ def admm(D,Phi_s,rho,gam,lam1,lam2,b_img=None,step=0.1,thresh=0.001,iters=100):
             L = L - (step*F)
 
         # S subproblem
-        S = shrink(D-L,lam2)
+        D_L = D-L
+        DL_n = np.mean(D_L)
+        if i % 3 == 0:
+            if DL_n < lam2/2.0:
+                lam2 /= 2.0
+            # elif DL_n > lam2*2.0:
+                # lam2 *= 2.0
+        S = shrink(D_L,lam2)
 
         # U subproblem
         A, Sig, B = np.linalg.svd(L-L_tilda,full_matrices=False)
+        Sig_n = np.mean(Sig)
+        if i % 3 == 0:
+            if Sig_n < (lam1/rho)/2.0:
+                lam1 /= 2.0
+            # elif Sig_n > (lam1/rho)*2.0:
+                # lam1 *= 2.0
         Sig_tilda = shrink(Sig,lam1/rho)
         Sig_tilda = scipy.sparse.diags(Sig_tilda,format='csr')
         U = A @ Sig_tilda @ B
@@ -69,12 +85,23 @@ def admm(D,Phi_s,rho,gam,lam1,lam2,b_img=None,step=0.1,thresh=0.001,iters=100):
             L_this = np.array(L)
             L_this = L_this.reshape((150,200,-1))
 
-            L_mean = L_this[:,:,L.shape[2]//2]
+            L_mean = L_this[:,:,L_this.shape[2]//2]
 
             diff = b_img-L_mean
             score = np.linalg.norm(diff,ord='fro')/np.linalg.norm(b_img,ord='fro')
 
             scores.append(score)
+
+        if f_imgs is not None:
+            S_this = np.array(S)
+            S_this = S_this.reshape((150,200,-1))
+
+            diff = f_imgs-np.abs(S_this)
+            # score = np.linalg.norm(diff,ord='fro')/np.linalg.norm(b_img,ord='fro')
+            score = np.mean(diff)
+
+            scores.append(score)
+
 
         a = np.linalg.norm(L-L_prev,ord='fro')/np.linalg.norm(L_prev,ord='fro')
         b = np.linalg.norm(S-S_prev,ord='fro')/np.linalg.norm(S_prev,ord='fro')
@@ -82,6 +109,6 @@ def admm(D,Phi_s,rho,gam,lam1,lam2,b_img=None,step=0.1,thresh=0.001,iters=100):
             print(f'leaving on iteration: {i}')
             break
 
-    if b_img:
+    if b_img is not None:
         return L*scale, S*scale, scores
     return L*scale, S*scale
