@@ -83,8 +83,8 @@ K = 15
 # lam2 = 60.0
 
 # robot reach
-# rho = 1.1e-1
-# gam = 1.1e-1
+# rho = 1.2e-1
+# gam = 1.2e-1
 # lam1 = 95.0
 # lam2 = 50.0
 
