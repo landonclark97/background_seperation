@@ -30,13 +30,13 @@ def tsp_to_nsp(A):
     return scipy.sparse.csr_matrix((A.coalesce().values().detach().numpy(),A.coalesce().indices().detach().numpy()),shape=(A.shape[0],A.shape[1]))
 
 
-
+SIGMA = 0e-3
 
 
 def PSNR(original, compressed):
     mse = np.mean((original - compressed) ** 2)
     if(mse == 0):
-        return 100
+        return 100.0
     max_pixel = 1.0
     psnr = 20.0 * np.log10(max_pixel / np.sqrt(mse))
     return psnr
@@ -47,63 +47,65 @@ def PSNR(original, compressed):
 # https://github.com/sverdoot/robust-pca
 
 
-vid_name = 'two_persons_walking'
+# vid_name = 'two_persons_walking'
+# vid_name = 'robot_reach'
+vid_name = 'human_rob_int'
 
 H = 150
-W = 200 
-
-cut_ind = 135
+W = 200
 
 
 print('loading images')
 
-#### MP4 Method #############
-vid = cv2.VideoCapture('../../data/' + vid_name + '.mp4')
-small_frames = []
-while True:
-    ret, im = vid.read() # .convert('RGB')
-    if ret == False:
-        break
-    im = cv2.resize(im.mean(-1), (W,H), None, None)
-    small_frames.append(im)
 
-b_img = small_frames[50]
-small_frames = small_frames[cut_ind:-5]
-frames = len(small_frames)
-data_mat = np.stack(list(map(lambda x: np.reshape(x,(H*W,1)),small_frames)),axis=1)
+im_list = glob.glob('../../data/'+vid_name+'_motionless/frame*.png')
 
-fig, axs = plt.subplots(3, 3, figsize=(13, 10))
-
-for i, ax in enumerate(axs.flatten()):
-    ax.imshow(small_frames[i], cmap='gray')
-    ax.axis("off")
-
-fig.tight_layout()
+frames = len(im_list)
+small_frames = np.empty((H,W,frames))
+# for f in range(frames):
+for f in range(1,frames+1):
+    img = cv2.imread('../../data/'+vid_name+'_motionless/frame'+str(f)+'.png')
+    small_frames[:,:,f-1] = cv2.resize(img.mean(-1), (W,H), None, None)
+data_mat = np.reshape(small_frames,(H*W,-1))
+b_img = cv2.imread('../../data/'+vid_name+'_motionless/b_img.png')
+b_img = cv2.resize(b_img.mean(-1), (W,H), None, None)
 
 
-# original one person walking
-# best: lam1: 5.0, lam2: 5e-2
-# [0.05, 2.0, 0.0005, 1e-05]
+data_mat += (np.random.normal(0.0,SIGMA,data_mat.shape)*255.0)
 
-# two person walking, 24 iters
-rho = 1e-2
-gam = 1e-5
-lam1 = 5.0
-lam2 = 1e-3
+beta = 1.8
+K = 15
 
-# one person walking, 24 iters
-# rho = 5e-3
-# gam = 5e-6
-# lam1 = 2.0
-# lam2 = 3e-3
+# two person walking
+# rho = 1.0e-1
+# gam = 1.0e-1
+# lam1 = 90.0
+# lam2 = 60.0
+
+# robot reach
+# rho = 1.1e-1
+# gam = 1.1e-1
+# lam1 = 95.0
+# lam2 = 50.0
+
+# human robot interaction
+rho = 1.2e-1
+gam = 1.2e-1
+lam1 = 80.0
+lam2 = 60.0
 
 
+mu = 0.001
+alp = 1.0
+
+b_img_c = np.copy(b_img)
 L, S, scores = admm(np.reshape(data_mat,(H,W,-1)),
                     laplace.s_laplace(np.reshape(data_mat,(H,W,-1))),
-                    rho,gam,lam1,lam2,b_img=b_img,thresh=0.0001,iters=50)
+                    rho,gam,lam1,lam2,beta,K,mu,alp,
+                    normalized=False,b_img=b_img,thresh=1e-4,iters=750)
 
-print(scores)
 
+print(min(scores))
 
 # format background images
 L = np.array(L)
@@ -114,28 +116,40 @@ S = np.array(S)
 S = S.reshape((H,W,-1))
 
 
+Dmin = np.amin(data_mat)
+Dmax = np.amax(data_mat)
+
+Smin = np.amin(S)
+Smax = np.amax(S)
+
+Lmin = np.amin(L)
+Lmax = np.amax(L)
+
 ncols = 6
 fig, axs = plt.subplots(3, ncols, figsize=(12, 5))
+
+fig.suptitle(f'Results with: rho: {rho}, gam: {gam}, lam1: {lam1}, lam2: {lam2}')
 
 for ax in axs.flatten():
     ax.axis('off')
 
 for i in range(ncols):
     ind = i*(frames//ncols)
-    axs[0, i].imshow(small_frames[ind], cmap='gray')
+    axs[0, i].imshow(small_frames[:,:,ind], cmap='gray', vmin=0.0, vmax=255.0)
 
     background = L[:,:, ind]#.reshape(small_frames[ind].shape)
     foreground = S[:,:, ind]#.reshape(small_frames[ind].shape)
-    axs[1, i].imshow(background, cmap='gray')
+    axs[1, i].imshow(background, cmap='gray', vmin=Lmin, vmax=Lmax)
     axs[1, i].set_title("ADMM, L")
-    axs[2, i].imshow(foreground, cmap='gray')
+    axs[2, i].imshow(foreground, cmap='gray', vmin=Smin, vmax=Smax)
     axs[2, i].set_title("ADMM, S")
 
 fig.tight_layout()
 plt.savefig("./admm_" + vid_name + ".pdf")
 
 
+with open('./L/admm_'+vid_name+'_L.npy', 'wb') as f:
+    np.save(f, L)
 
-
-
-
+with open('./S/admm_'+vid_name+'_S.npy', 'wb') as f:
+    np.save(f, S)

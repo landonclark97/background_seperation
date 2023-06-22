@@ -68,7 +68,6 @@ for i, ims in enumerate(f_im_list):
     im = cv2.resize(f_im.mean(-1), (W,H), None, None)
     f_mask[:,:,i] = im
 
-
 # b_img = small_frames[50]
 small_frames = small_frames[cut_ind:-5]
 frames = len(small_frames)

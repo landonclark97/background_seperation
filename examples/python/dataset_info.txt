@@ -1,0 +1,19 @@
+Two Persons Walking:
+    * All frames should be in two_persons_walking folder.
+    * Frames resized to 150 by 200, but not cropped.
+    * No motionless frames removed.
+
+Human Robot Interaction:
+    * All frames should be in the human_rob_int_motionless folder.
+    * Motionless frames removed using thresholding and Frobenius norm
+    * Frames first cropped removing 20 pixels from the left and 0 from right.
+    * Frames are cropped removing 507 pixels from the top and 320 pixels from the bottom.
+    * Frames are resized to 150 by 200.
+
+Robot Reach:
+    * All frames should be in the robot_reach_motionless folder.
+    * Motionless frames removed using thresholding and Frobenius norm
+    * Frames first cropped removing 15 pixels from the left and 0 from right.
+    * Frames are cropped removing 500 pixels from the top and 300 pixels from the bottom.
+    * Frames are resized to 150 by 200.
+
