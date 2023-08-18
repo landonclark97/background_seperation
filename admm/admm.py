@@ -19,10 +19,11 @@ def admm(D,
          K=10,
          mu=0.0,
          alp=1.0,
+         wrap_t=True,
          normalized=True,
          b_img=None,
          f_imgs=None,
-         step=0.5,
+         step=0.1,
          grad_thresh=1e-3,
          thresh=1e-4,
          iters=100):
@@ -35,9 +36,7 @@ def admm(D,
     else:
         scale = torch.max(D).item()
     D /= scale
-    if (b_img is not None) and (not normalized):
-        b_img /= 255.0
-    elif b_img is not None:
+    if b_img is not None:
         b_img /= scale
     if f_imgs is not None:
         f_imgs /= np.amax(f_imgs)
@@ -66,7 +65,8 @@ def admm(D,
     Dt = np.identity(t)*w(0)
     for k in range(1,K):
         Dt += np.eye(t,k=-k)*w(k)
-        Dt += np.eye(t,k=t-k)*w(k)
+        if wrap_t:
+            Dt += np.eye(t,k=t-k)*w(k)
 
     DtDtT = Dt@Dt.T
 
@@ -87,8 +87,7 @@ def admm(D,
 
         U_L_tilda = U+L_tilda
         S_D = S-D
-        
-        
+
         for g in range(50):
             with torch.no_grad():
                 Phi_s_L = torch.sparse.mm(Phi_s.to(device), torch.tensor(L).to(device)).cpu().detach().numpy()
@@ -99,12 +98,16 @@ def admm(D,
 
         # S subproblem
         D_L = D-L
-        lam2_shrink = np.percentile(np.abs(D_L), lam2)
+        # lam2_shrink = np.percentile(np.abs(D_L), lam2)
+        # lam2_shrink = np.mean(np.abs(D_L))
+        lam2_shrink = max(lam2*np.exp(-0.000*float(i)),0.0015) # robot reach: (0.02, 0.0035)
         S = shrink(D_L,lam2_shrink)
 
         # U subproblem
         A, Sig, B = np.linalg.svd(L-L_tilda,full_matrices=False)
-        lam1_shrink = np.percentile(Sig, lam1)
+        # lam1_shrink = np.percentile(Sig, lam1)
+        # lam1_shrink = lam1/rho
+        lam1_shrink = max(lam1*np.exp(-0.000*float(i)),0.3)/rho # robot reach: (0.02, 0.0035)
         Sig_tilda = shrink(Sig,lam1_shrink)
         Sig_tilda = scipy.sparse.diags(Sig_tilda,format='csr')
         U = A @ Sig_tilda @ B
@@ -115,7 +118,7 @@ def admm(D,
             L_this = np.array(L)
             L_this = L_this.reshape((150,200,-1))
 
-            L_mean = L_this[:,:,L_this.shape[2]//2]
+            L_mean = np.mean(L_this, axis=-1)
 
             diff = b_img-L_mean
             score = np.linalg.norm(diff,ord='fro')/np.linalg.norm(b_img,ord='fro')
@@ -131,7 +134,7 @@ def admm(D,
             scores.append(score)
 
         print('____________________________________________________')
-        print(f'|| {score:.6f} :||: {lam1_shrink:.6f}, {lam2_shrink:.6f}, {gam:.3f}, {rho:.3f} ||')
+        print(f'|| {min(scores):.6f}, {score:.6f} :||: {lam1_shrink:.6f}, {lam2_shrink:.6f}, {gam:.3f}, {rho:.3f} ||')
         print('____________________________________________________')
 
 

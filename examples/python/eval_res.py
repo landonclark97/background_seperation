@@ -16,16 +16,16 @@ W = 200
 
 
 
-# vid_name = 'two_persons_walking'
+vid_name = 'two_persons_walking'
 # vid_name = 'robot_reach'
-vid_name = 'human_rob_int'
+# vid_name = 'human_rob_int'
 
 # method='ircur'
 # method='st_pcp'
 # method='pcp'
-# method='admm'
+method='admm'
 # method = 'frpcag'
-method = 'pcagtv'
+# method = 'pcagtv'
 
 SCALE = 1.0
 
@@ -142,10 +142,6 @@ print(f_mask.shape)
 
 L_mean = np.mean(L,axis=2)
 
-L_mean = cv2.imread('human_rob_int_lmean.png')
-L_mean = cv2.resize(L_mean.mean(-1), (W,H), None, None)
-L_mean = np.interp(L_mean, (L_mean.min(), L_mean.max()), (0.2, 0.6325))
-
 
 b_img_mx = np.amax(b_img)
 b_img_mn = np.amin(b_img)
@@ -173,7 +169,7 @@ axs.imshow(L_mean,cmap='gray',vmin=0.0,vmax=1.0)
 plt.show()
 
 
-threshs = np.linspace(0.0,1.0,100)
+threshs = np.linspace(0.0,1.0,400)
 
 S_vec = np.abs(S.flatten())
 F_vec = f_mask.flatten()
@@ -210,6 +206,8 @@ for th in threshs:
         continue
 
     if pr*re*fm > max_res:
+    # if pr+re+fm > max_res:
+        # max_res = pr+re+fm
         max_res = pr*re*fm
         ideal_th = th
         res = [pr, re, fm, th]

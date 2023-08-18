@@ -47,9 +47,9 @@ def PSNR(original, compressed):
 # https://github.com/sverdoot/robust-pca
 
 
-# vid_name = 'two_persons_walking'
+vid_name = 'two_persons_walking'
 # vid_name = 'robot_reach'
-vid_name = 'human_rob_int'
+# vid_name = 'human_rob_int'
 
 H = 150
 W = 200
@@ -70,39 +70,38 @@ data_mat = np.reshape(small_frames,(H*W,-1))
 b_img = cv2.imread('../../data/'+vid_name+'_motionless/b_img.png')
 b_img = cv2.resize(b_img.mean(-1), (W,H), None, None)
 
-
 data_mat += (np.random.normal(0.0,SIGMA,data_mat.shape)*255.0)
 
 beta = 1.8
 K = 15
 
 # two person walking
-# rho = 1.0e-1
-# gam = 1.0e-1
-# lam1 = 90.0
-# lam2 = 60.0
+rho = 0.001 # 0.01e-1 # 0.005, 0.001
+gam = 0.005 # 0.05e-1 # 0.005, 0.005
+lam1 = 1.0 # 1.0  # 3.0, 1.0
+lam2 = 0.003 # 0.0029 # 0.007, 0.003
 
 # robot reach
 # rho = 1.2e-1
 # gam = 1.2e-1
-# lam1 = 95.0
-# lam2 = 50.0
+# lam1 = 2.0
+# lam2 = 0.05
 
 # human robot interaction
-rho = 1.2e-1
-gam = 1.2e-1
-lam1 = 80.0
-lam2 = 60.0
+# rho = 1.2e-1
+# gam = 1.2e-1
+# lam1 = 5.5
+# lam2 = 0.0188
 
 
-mu = 0.001
+mu = 0.00001
 alp = 1.0
 
 b_img_c = np.copy(b_img)
 L, S, scores = admm(np.reshape(data_mat,(H,W,-1)),
                     laplace.s_laplace(np.reshape(data_mat,(H,W,-1))),
-                    rho,gam,lam1,lam2,beta,K,mu,alp,
-                    normalized=False,b_img=b_img,thresh=1e-4,iters=750)
+                    rho,gam,lam1,lam2,beta,K,mu,alp,step=0.5,wrap_t=True,
+                    normalized=False,b_img=b_img,thresh=1e-5,iters=172)
 
 
 print(min(scores))

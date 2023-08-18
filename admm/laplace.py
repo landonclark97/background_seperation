@@ -93,12 +93,12 @@ def s_laplace(d):
 
     STRIDE = 1
     PAD_LEN = 4
-    WIN_LEN = 2
+    WIN_LEN = 4
 
     PAD_OFF = (2*PAD_LEN)+1
     K = (4*(PAD_LEN**2))+(4*PAD_LEN)
 
-    THETA = 25.0
+    THETA = 100.0
 
     dT = d.permute(*torch.arange(d.ndim-1,-1,-1))
     d = transforms.Pad(PAD_LEN,padding_mode='symmetric')(dT)
