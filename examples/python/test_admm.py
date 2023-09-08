@@ -8,7 +8,6 @@ import laplace
 
 import torch
 import torch.sparse
-from torchvision import transforms
 import numpy as np
 import scipy
 import scipy.sparse
@@ -75,11 +74,19 @@ data_mat += (np.random.normal(0.0,SIGMA,data_mat.shape)*255.0)
 beta = 1.8
 K = 15
 
+
+
+# rho = 5e-3
+# gam = 5e-6
+# lam1 = 2.0
+# lam2 = 3e-3
+
+
 # two person walking
-rho = 0.001 # 0.01e-1 # 0.005, 0.001
-gam = 0.005 # 0.05e-1 # 0.005, 0.005
-lam1 = 1.0 # 1.0  # 3.0, 1.0
-lam2 = 0.003 # 0.0029 # 0.007, 0.003
+rho = 1e-1 #0.001 # 0.01e-1 # 0.005, 0.001
+gam = 1e-1 #0.005 # 0.05e-1 # 0.005, 0.005
+lam1 = 3.5 #1.0 # 1.0  # 3.0, 1.0
+lam2 = 0.005 #0.003 # 0.0029 # 0.007, 0.003
 
 # robot reach
 # rho = 1.2e-1
@@ -94,13 +101,13 @@ lam2 = 0.003 # 0.0029 # 0.007, 0.003
 # lam2 = 0.0188
 
 
-mu = 0.00001
+mu = 0.01
 alp = 1.0
 
 b_img_c = np.copy(b_img)
 L, S, scores = admm(np.reshape(data_mat,(H,W,-1)),
                     laplace.s_laplace(np.reshape(data_mat,(H,W,-1))),
-                    rho,gam,lam1,lam2,beta,K,mu,alp,step=0.5,wrap_t=True,
+                    rho,gam,lam1,lam2,beta,K,mu,alp,step=0.1,wrap_t=True,
                     normalized=False,b_img=b_img,thresh=1e-5,iters=172)
 
 

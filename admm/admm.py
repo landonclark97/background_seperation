@@ -88,10 +88,20 @@ def admm(D,
         U_L_tilda = U+L_tilda
         S_D = S-D
 
+        tht_t = 1.0
+        Z_t = L
         for g in range(50):
             with torch.no_grad():
                 Phi_s_L = torch.sparse.mm(Phi_s.to(device), torch.tensor(L).to(device)).cpu().detach().numpy()
             F = (L + S_D) + (gam*(Phi_s_L @ DtDtT)) + (rho*(L - U_L_tilda))
+            # Z_t_1 = Z_t - (step*F)
+
+            # tht_t_1 = (1.0+np.sqrt(1+4.0*(tht_t**2)))/2.0
+            # g_t = (1.0-tht_t)/tht_t_1
+            # tht_t = tht_t_1
+
+            # L = ((1.0-g_t)*Z_t_1) + (g_t*Z_t)
+            # Z_t = Z_t_1
             L = L - (step*F)
             if np.linalg.norm(step*F,ord='fro') < grad_thresh:
                 break
@@ -137,6 +147,8 @@ def admm(D,
         print(f'|| {min(scores):.6f}, {score:.6f} :||: {lam1_shrink:.6f}, {lam2_shrink:.6f}, {gam:.3f}, {rho:.3f} ||')
         print('____________________________________________________')
 
+        L_prev = np.clip(L_prev, 0.0, 1.0)
+        L = np.clip(L, 0.0, 1.0)
 
         a = np.linalg.norm(L-L_prev,ord='fro')/np.linalg.norm(L_prev,ord='fro')
         b = np.linalg.norm(S-S_prev,ord='fro')/np.linalg.norm(S_prev,ord='fro')

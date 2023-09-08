@@ -2,7 +2,8 @@
 # coding: utf-8
 
 import sys
-sys.path.insert(0, '../../admm')
+sys.path.insert(0, '../admm')
+sys.path.insert(0, '../tests/robust-pca')
 
 from admm import admm
 import laplace
@@ -22,7 +23,7 @@ import glob
 H = 150
 W = 200
 
-SIGMA = 5e-3
+# SIGMA = 5e-3
 
 
 
@@ -31,15 +32,15 @@ vid_name = 'two_persons_walking'
 # vid_name = 'human_rob_int'
 
 
-b_name = '../../data/'+vid_name+'_motionless/frame'
+b_name = '../data/'+vid_name+'_motionless/b_img.png'
 
-b_img = cv2.imread('../../data/'+vid_name+'_motionless/b_img.png')
+b_img = cv2.imread(b_name)
 b_img = b_img.mean(-1)
 b_img /= 255.0
 # b_img /= np.amax(b_img)
 
 
-f_name = '../../data/'+vid_name+'_motionless/'
+f_name = '../data/'+vid_name+'_motionless/'
 f_im_list = glob.glob(f_name+'frame*.png')
 
 frames = len(f_im_list)
@@ -49,21 +50,22 @@ for f in range(1,frames+1):
     im = cv2.resize(f_im.mean(-1), (W,H), None, None)
     data_mat[:,:,f-1] = im
 
-data_mat /= np.amax(data_mat)
+data_mat /= 255.0
+# data_mat /= np.amax(data_mat)
 
 
 small_frames = np.copy(data_mat)
 
 data_mat = np.reshape(data_mat,(H*W,-1))
-data_mat += np.random.normal(0.0,SIGMA,data_mat.shape)
+# data_mat += np.random.normal(0.0,SIGMA,data_mat.shape)
 
-fig, axs = plt.subplots(3, 3, figsize=(13, 10))
+# fig, axs = plt.subplots(3, 3, figsize=(13, 10))
 
-for i, ax in enumerate(axs.flatten()):
-    ax.imshow(small_frames[:,:,i], cmap="gray")
-    ax.axis("off")
+# for i, ax in enumerate(axs.flatten()):
+#     ax.imshow(small_frames[:,:,i], cmap="gray")
+#     ax.axis("off")
 
-fig.tight_layout()
+# fig.tight_layout()
 
 
 
@@ -83,9 +85,9 @@ print('finish PCP')
 L = np.reshape(L_pcp, (H,W,-1))
 S = np.reshape(S_pcp, (H,W,-1))
 
-with open('../../examples/python/L/pcp_' + vid_name + '_L.npy', 'wb') as f:
+with open('./L/pcp_' + vid_name + '_L.npy', 'wb') as f:
     np.save(f, L)
-with open('../../examples/python/S/pcp_' + vid_name + '_S.npy', 'wb') as f:
+with open('./S/pcp_' + vid_name + '_S.npy', 'wb') as f:
     np.save(f, S)
 
 
@@ -124,9 +126,9 @@ print('finish stable PCP')
 L = np.reshape(L_st_pcp, (H,W,-1))
 S = np.reshape(S_st_pcp, (H,W,-1))
 
-with open('../../examples/python/L/st_pcp_' + vid_name + '_L.npy', 'wb') as f:
+with open('./L/st_pcp_' + vid_name + '_L.npy', 'wb') as f:
     np.save(f, L)
-with open('../../examples/python/S/st_pcp_' + vid_name + '_S.npy', 'wb') as f:
+with open('./S/st_pcp_' + vid_name + '_S.npy', 'wb') as f:
     np.save(f, S)
 
 
@@ -169,8 +171,6 @@ rank = 2
 c = 4
 nrows, ncols = int(c * rank * np.log(data_mat.shape[0])), int(c * rank * np.log(data_mat.shape[1]))
 
-print(nrows, ncols)
-quit()
 for i in range(ITERS):
     L_curr, S_curr = pcp_alm.decompose(data_mat, rank, nrows, ncols, thresholding_decay=0.65, initial_threshold=100, verbose=True, max_iter=500, tol=1e-9)
     L_ircur += L_curr
@@ -185,9 +185,9 @@ print('finish IRCUR')
 L = np.reshape(L_ircur, (H,W,-1))
 S = np.reshape(S_ircur, (H,W,-1))
 
-with open('../../examples/python/L/ircur_' + vid_name + '_L.npy', 'wb') as f:
+with open('./L/ircur_' + vid_name + '_L.npy', 'wb') as f:
     np.save(f, L)
-with open('../../examples/python/S/ircur_' + vid_name + '_S.npy', 'wb') as f:
+with open('./S/ircur_' + vid_name + '_S.npy', 'wb') as f:
     np.save(f, S)
 
 
@@ -215,53 +215,74 @@ with open('../../examples/python/S/ircur_' + vid_name + '_S.npy', 'wb') as f:
 # fig.tight_layout()
 # plt.savefig("./figs/ircur_" + vid_name + ".pdf")
 
-quit()
 
-# rho = 5e-3
-# gam = 5e-6
-# lam1 = 2.0
-# lam2 = 1e-3
+beta = 1.8
+K = 15
 
+# two person walking - these values are not fine-tuned
+if vid_name == 'two_persons_walking':
+    rho = 1e-1 #0.001 # 0.01e-1 # 0.005, 0.001
+    gam = 1e-1 #0.005 # 0.05e-1 # 0.005, 0.005
+    lam1 = 3.5 #1.0 # 1.0  # 3.0, 1.0
+    lam2 = 0.005 #0.003 # 0.0029 # 0.007, 0.003
 
-rho = 5e-3
-gam = 5e-6
-lam1 = 2.0
-lam2 = 3e-3
+# robot reach
+elif vid_name == 'robot_reach':
+    rho = 1.2e-1
+    gam = 1.2e-1
+    lam1 = 2.0
+    lam2 = 0.05
 
-
-print('start ADMM')
-L_admm, S_admm = admm(np.reshape(data_mat,(H,W,-1)),
-                      laplace.s_laplace(np.reshape(data_mat,(H,W,-1))),
-                      rho,gam,lam1,lam2,thresh=0.0001,iters=24)
-L_admm = np.where(np.abs(L_admm) > 20.0, L_admm, 0.0)
-S_admm = np.where(np.abs(S_admm) > 20.0, S_admm, 0.0)
-print('finish ADMM')
-
-
-
-
-# f'intrisic rank: {np.linalg.matrix_rank(L_admm)}, original rank: {np.linalg.matrix_rank(data_mat)}, fraction of outliers: {(S_admm != 0).mean():.3f}'
+# human robot interaction
+elif vid_name == 'human_rob_int':
+    rho = 1.2e-1
+    gam = 1.2e-1
+    lam1 = 5.5
+    lam2 = 0.0188
 
 
+mu = 0.0001
+alp = 1.0
 
-from matplotlib import pyplot as plt
+b_img_c = np.copy(b_img)
+L, S, scores = admm(np.reshape(data_mat,(H,W,-1)),
+                    laplace.s_laplace(np.reshape(data_mat,(H,W,-1))),
+                    rho,gam,lam1,lam2,beta,K,mu,alp,step=0.1,wrap_t=True,
+                    normalized=False,b_img=b_img,thresh=1e-5,iters=250)
 
-ncols = 6
-fig, axs = plt.subplots(3, ncols, figsize=(12, 5))
+print(min(scores))
 
-for ax in axs.flatten():
-    ax.axis('off')
+L = np.array(L)
+L = L.reshape((H,W,-1))
 
-for i in range(ncols):
-    ind = i*(frames//ncols)
-    axs[0, i].imshow(small_frames[:,:,ind], cmap='gray')
+S = np.array(S)
+S = S.reshape((H,W,-1))
 
-    background = L_admm[:, ind].reshape(small_frames[ind].shape)
-    foreground = S_admm[:, ind].reshape(small_frames[ind].shape)
-    axs[1, i].imshow(background, cmap='gray')
-    axs[1, i].set_title("ADMM, L")
-    axs[2, i].imshow(np.abs(foreground), cmap='gray')
-    axs[2, i].set_title("ADMM, S")
 
-fig.tight_layout()
-plt.savefig("./figs/admm_" + vid_name + ".pdf")
+with open('./L/admm_'+vid_name+'_L.npy', 'wb') as f:
+    np.save(f, L)
+
+with open('./S/admm_'+vid_name+'_S.npy', 'wb') as f:
+    np.save(f, S)
+
+# from matplotlib import pyplot as plt
+
+# ncols = 6
+# fig, axs = plt.subplots(3, ncols, figsize=(12, 5))
+
+# for ax in axs.flatten():
+#     ax.axis('off')
+
+# for i in range(ncols):
+#     ind = i*(frames//ncols)
+#     axs[0, i].imshow(small_frames[:,:,ind], cmap='gray')
+
+#     background = L_admm[:, ind].reshape(small_frames[ind].shape)
+#     foreground = S_admm[:, ind].reshape(small_frames[ind].shape)
+#     axs[1, i].imshow(background, cmap='gray')
+#     axs[1, i].set_title("ADMM, L")
+#     axs[2, i].imshow(np.abs(foreground), cmap='gray')
+#     axs[2, i].set_title("ADMM, S")
+
+# fig.tight_layout()
+# plt.savefig("./figs/admm_" + vid_name + ".pdf")
